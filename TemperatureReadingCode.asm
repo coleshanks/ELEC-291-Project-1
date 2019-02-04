@@ -363,5 +363,91 @@ forever:
 	lcall MyDelay
 	
 	sjmp forever
+	
+FSM:
+	DSEG at 0x30
+	;CSEG
+	temp_soak: 		ds 1
+	time_soak: 		ds 1
+	temp_refl: 		ds 1
+	time_refl: 		ds 1
+	temp_finish:		ds 1
+
+	mov temp_soak, 		#150
+	mov time_soak, 		#60
+	mov temp_refl,		#220
+	mov time_refl, 		#45
+	mov temp_finish,	#60
+
+	sjmp state0
+
+next_state:
+	mov a, state
+
+state0:
+	cjne a, #0, state1
+	mov pwm, #0
+	jb KEY.3 state0_done
+	jnb KEY.3, $
+	mov state, #1
+state0_done:
+	ljmp next_state
+
+state1:
+	cjne a, #1, state2
+	mov pwm, #100
+	mov sec, #0
+	mov a, temp_soak
+	clr c
+	subb a, temp
+	jnc state1_done
+	mov state, #2
+state1_done:
+	ljmp next_state
+
+state2:
+	cjne a, #2, state3
+	mov pwm, #20
+	mov a, time_soak
+	clr c
+	subb a, sec
+	jnc state2_done
+	mov state, #3
+state2_done:
+	ljmp next_state
+
+state3:
+	cjne a, #3, state4
+	mov pwm, #100
+	mov sec, #0
+	mov a, temp_refl
+	clr c
+	subb a, temp
+	jnc state3_done
+	mov state, #4
+state3_done:
+	ljmp next_state
+
+state4:
+	cjne a, #4, state5
+	mov pwm #20
+	mov a, time_refl
+	clr c
+	subb a, sec
+	jnc state4_done
+	mov state, #5
+state4_done:
+	ljmp next_state
+
+state5:
+	cjne a, #5, state0
+	mov pwm, #0
+	mov a, temp_finish
+	clr c
+	subb a, temp
+	jnc state5_done
+	mov state, #0
+state5_done:
+	ljmp next_state
 
 end
