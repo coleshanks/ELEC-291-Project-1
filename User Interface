@@ -1,0 +1,140 @@
+$NOLIST
+$MODDE1SOC
+$LIST
+
+; Reset vector
+org 0x0000
+	ljmp MainProgram
+		
+DSEG at 30H
+	temp_soak: 		ds 1
+	time_soak: 		ds 1
+	temp_refl: 		ds 1
+	time_refl: 		ds 1
+	temp_finish:	ds 1
+	state:			ds 1
+CSEG
+	; These 'equ' must match the wiring between the DE1-SoC board and the LCD!
+	; P0 is in connector JP2.  Check "CV-8052 Soft Processor in the DE1-SoC Board: Getting
+	; Started Guide" for the details.
+	ELCD_RS equ P0.4
+	ELCD_RW equ P0.5
+	ELCD_E  equ P0.6
+	ELCD_D4 equ P0.0
+	ELCD_D5 equ P0.1
+	ELCD_D6 equ P0.2
+	ELCD_D7 equ P0.3
+	UPDOWN 	equ SWA.0
+	
+$NOLIST
+$include(LCD_4bit_DE1SoC.inc) ; A library of LCD related functions and utility macros
+$LIST
+
+	Initial_Message0:  db '1 ', 0
+	Initial_Message1:  db 'TeS ', 0
+	Initial_Message2:  db 'TiS ', 0
+	Initial_Message3:  db 'TeR ', 0
+	Initial_Message4:  db 'TiR ', 0
+
+;                     1234567890123456    <- This helps determine the location of the counter
+Initial_Message:  db 'Hello ', 0
+
+
+MainProgram:
+    mov SP, #0x7F
+    mov P0MOD, #01111111b ; P0.0 to P0.6 are outputs.  ('1' makes the pin output)
+    mov P1MOD, #00000011b ; P1.0 and P1.0 are outputs
+    lcall ELCD_4BIT ; Configure LCD in four bit mode
+	mov LEDRA, #0 ; LEDRA is bit addressable
+    mov LEDRB, #0 ; LEDRB is NOT bit addresable
+	
+
+	mov temp_soak, 		#0x25
+	mov time_soak, 		#0x50
+	mov temp_refl,		#0x60
+	mov time_refl, 		#0x18
+	
+	sjmp displayloop
+	
+displayloop:
+	Set_Cursor(1,1)
+	Send_Constant_String(#Initial_Message1)
+	Set_Cursor(1,5)
+	Display_BCD(temp_soak)
+	Set_Cursor(1,9)
+	Send_Constant_String(#Initial_Message2)
+	Set_Cursor(1,13)
+	Display_BCD(time_soak)
+	Set_Cursor(2,1)
+	Send_Constant_String(#Initial_Message3)
+	Set_Cursor(2,5)
+	Display_BCD(temp_refl)
+	Set_Cursor(2,9)
+	Send_Constant_String(#Initial_Message4)
+	Set_Cursor(2,13)
+	Display_BCD(time_refl)
+	sjmp check_temp_soak
+	
+check_temp_soak:
+    jb KEY.1, check_time_soak
+    Wait_Milli_Seconds(#50)
+    jb KEY.1, check_time_soak
+    jnb KEY.1,$
+set_temp_soak:
+	mov a, temp_soak
+	cjne a,#0x90, change_temp_soak
+	mov a,#0x30
+	mov temp_soak,a
+change_temp_soak:
+	add a, #0x01
+	da a
+	mov temp_soak,a
+
+check_time_soak:;
+    jb KEY.2, check_temp_refl 
+    Wait_Milli_Seconds(#50)
+    jb KEY.2, check_temp_refl 
+    jnb KEY.2, $
+set_time_soak:
+	mov a, time_soak
+	cjne a, #0x50, change_time_soak
+	mov a, #0x20
+	mov time_soak, a
+change_time_soak:
+	add a, #0x01
+	da a
+	mov time_soak, a
+	
+check_temp_refl:;
+    jb KEY.3, check_time_refl 
+    Wait_Milli_Seconds(#50)
+    jb KEY.3, check_time_refl
+    jnb KEY.3, $
+set_temp_refl:
+	mov a, temp_refl
+	cjne a, #0x26, change_temp_refl
+	mov a, #0x40
+	mov temp_refl, a
+change_temp_refl:
+	add a, #0x01
+	da a
+	mov temp_refl, a
+	
+check_time_refl:
+    jb UPDOWN, go_back_to_top 
+    Wait_Milli_Seconds(#50)
+    jb UPDOWN, go_back_to_top
+    jnb UPDOWN, $
+set_time_refl:
+	mov a, time_refl
+	cjne a, #0x65, change_time_refl
+	mov a, #0x30
+	mov time_refl, a
+change_time_refl:
+	add a, #0x01
+	da a
+	mov time_refl, a
+go_back_to_top:
+	ljmp displayloop
+	
+end
