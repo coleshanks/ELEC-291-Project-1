@@ -7,18 +7,15 @@ org 0x0000
 	ljmp MainProgram
 		
 DSEG at 30H
-	x:   					ds 4
-	y:   					ds 4
-	bcd: 					ds 5
-	temp_soak: 				ds 1
-	time_soak: 				ds 1
-	temp_refl: 				ds 1
-	time_refl: 				ds 1
-	temp_finish:			ds 1
-	state:					ds 1
-	temp_soak_FSM_Decimal: 	ds 1
-BSEG
-	mf: 					dbit 1	
+	temp_soak: 					ds 1
+	time_soak: 					ds 1
+	temp_refl: 					ds 1
+	time_refl: 					ds 1
+	temp_soak_FSM: 				ds 1
+	time_soak_FSM: 				ds 1
+	temp_refl_FSM: 				ds 1
+	time_refl_FSM: 				ds 1
+	state:						ds 1
 CSEG
 	; These 'equ' must match the wiring between the DE1-SoC board and the LCD!
 	; P0 is in connector JP2.  Check "CV-8052 Soft Processor in the DE1-SoC Board: Getting
@@ -40,10 +37,6 @@ $NOLIST
 $include(LCD_4bit_DE1SoC.inc) ; A library of LCD related functions and utility macros
 $LIST
 
-$NOLIST
-$include(math32.inc) ; A library of LCD related functions and utility macros
-$LIST
-
 	Initial_Message0:  db '1 ', 0
 	Initial_Message1:  db 'TeS ', 0
 	Initial_Message2:  db 'TiS ', 0
@@ -63,24 +56,30 @@ MainProgram:
     mov LEDRB, #0 ; LEDRB is NOT bit addresable
 	
 
-	mov temp_soak, 		#0x30
-	mov time_soak, 		#0x05
-	mov temp_refl,		#0x30
-	mov time_refl, 		#0x20
+	mov temp_soak, 			#0x30
+	mov time_soak, 			#0x05
+	mov temp_refl,			#0x30
+	mov time_refl, 			#0x20
+	
+	mov temp_soak_FSM, 		#0x30
+	mov time_soak_FSM, 		#0x05
+	mov temp_refl_FSM,		#0x30
+	mov time_refl_FSM, 		#0x20
 	
 	sjmp displayloop
 	
 displayloop:
+	mov a, temp_soak_FSM
+	cjne a, #34, hop
+	setb LEDRA.0
+	lcall wait_half_sec	
+	clr LEDRA.0
+	lcall wait_half_sec
+	hop:
 	Set_Cursor(1,1)
 	Send_Constant_String(#Initial_Message1)
 	Set_Cursor(1,5)
 	Display_BCD(temp_soak)
-	mov x+0, temp_soak
-	mov x+1, #0
-	mov x+2, #0
-	mov x+3, #0
-	lcall hex2bcd2
-	mov temp_soak_FSM_Decimal, y+0
 	Set_Cursor(1,9)
 	Send_Constant_String(#Initial_Message2)
 	Set_Cursor(1,13)
@@ -97,22 +96,28 @@ displayloop:
 	
 check_temp_soak:
     jnb UPDOWN_3, check_time_soak 
-	lcall wait_one_sec
-	lcall wait_one_sec
+	lcall wait_half_sec
 set_temp_soak:
 	mov a, temp_soak
-	cjne a,#0x50, change_temp_soak
-	mov a,#0x29
-	mov temp_soak,a
+	cjne a, #0x50, change_temp_soak
+	mov a, #0x29
+	mov temp_soak, a
 change_temp_soak:
 	add a, #0x01
 	da a
-	mov temp_soak,a
+	mov temp_soak, a
+set_temp_soak_FSM:
+	mov a, temp_soak_FSM
+	cjne a, #50, change_temp_soak_FSM
+	mov a, #29
+	mov temp_soak_FSM, a
+change_temp_soak_FSM:
+	add a, #1
+	mov temp_soak_FSM, a
 
 check_time_soak:
     jnb UPDOWN_1, check_temp_refl 
-	lcall wait_one_sec
-	lcall wait_one_sec
+	lcall wait_half_sec
 set_time_soak:
 	mov a, time_soak
 	cjne a, #0x20, change_time_soak
@@ -122,11 +127,18 @@ change_time_soak:
 	add a, #0x01
 	da a
 	mov time_soak, a
+set_time_soak_FSM:
+	mov a, time_soak_FSM
+	cjne a, #20, change_time_soak_FSM
+	mov a, #4
+	mov time_soak_FSM, a
+change_time_soak_FSM:
+	add a, #1
+	mov time_soak_FSM, a
 	
-check_temp_refl:;
+check_temp_refl:
     jnb UPDOWN_2, check_time_refl 
-	lcall wait_one_sec
-	lcall wait_one_sec
+	lcall wait_half_sec
 set_temp_refl:
 	mov a, temp_refl
 	cjne a, #0x40, change_temp_refl
@@ -136,15 +148,18 @@ change_temp_refl:
 	add a, #0x01
 	da a
 	mov temp_refl, a
+set_temp_refl_FSM:
+	mov a, temp_refl_FSM
+	cjne a, #40, change_temp_refl_FSM
+	mov a, #19
+	mov temp_refl_FSM, a
+change_temp_refl_FSM:
+	add a, #1
+	mov temp_refl_FSM, a
 	
 check_time_refl:
-	mov a, temp_soak_FSM_Decimal
-	cjne a, #40, hop
-	cpl LEDRA.0
-hop:
     jnb UPDOWN_0, go_back_to_top 
-	lcall wait_one_sec
-	lcall wait_one_sec
+	lcall wait_half_sec
 set_time_refl:
 	mov a, time_refl
 	cjne a, #0x30, change_time_refl
@@ -154,10 +169,20 @@ change_time_refl:
 	add a, #0x01
 	da a
 	mov time_refl, a
+set_time_refl_FSM:
+	mov a, time_refl_FSM
+	cjne a, #30, change_time_refl_FSM
+	mov a, #9
+	mov time_refl_FSM, a
+change_time_refl_FSM:
+	add a, #1
+	mov time_refl_FSM, a
+	
 go_back_to_top:
 	ljmp displayloop
 	
-wait_one_sec:
+wait_half_sec:
+	Wait_Milli_Seconds(#250)
 	Wait_Milli_Seconds(#250)
 	ret
 	
